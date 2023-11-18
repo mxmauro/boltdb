@@ -78,7 +78,7 @@ func (tx *TX) Bucket(path []byte) (*Bucket, error) {
 }
 
 // DeleteBucket removes an existing child bucket on the database
-// NOTE: Inner subkeys and buckets will be also deleted
+// NOTE: Inner sub-keys and buckets will be also deleted
 func (tx *TX) DeleteBucket(path []byte) error {
 	var err error
 
