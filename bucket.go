@@ -54,7 +54,7 @@ func (bucket *Bucket) Put(key []byte, value []byte) error {
 	return bucket.b.Put(key, value)
 }
 
-// Delete deletes a specific key
+// Delete deletes a specific key. No error is returned if key is not found
 func (bucket *Bucket) Delete(key []byte) error {
 	return bucket.b.Delete(key)
 }
@@ -106,7 +106,7 @@ func (bucket *Bucket) Bucket(path []byte) (*Bucket, error) {
 	path = removeLeadingSlashes(path)
 	nameLen := getPathFragmentLen(path)
 	if nameLen < 1 {
-		return nil, errors.New("invalid path")
+		return nil, ErrInvalidPath
 	}
 
 	if !bucket.tx.readOnly {
@@ -119,7 +119,7 @@ func (bucket *Bucket) Bucket(path []byte) (*Bucket, error) {
 	} else {
 		b = bucket.b.Bucket(path[0:nameLen])
 		if b == nil {
-			return nil, bbolt.ErrBucketNotFound
+			return nil, ErrBucketNotFound
 		}
 	}
 
@@ -146,12 +146,12 @@ func (bucket *Bucket) Bucket(path []byte) (*Bucket, error) {
 }
 
 // DeleteBucket removes an existing child bucket on the database
-// NOTE: Inner subkeys and buckets will be also deleted
+// NOTE: Inner sub-keys and buckets will be also deleted
 func (bucket *Bucket) DeleteBucket(path []byte) error {
 	var err error
 
 	if bucket.tx.readOnly {
-		return bbolt.ErrTxNotWritable
+		return ErrTxNotWritable
 	}
 
 	path = removeLeadingSlashes(removeTrailingSlashes(path))
@@ -168,7 +168,7 @@ func (bucket *Bucket) DeleteBucket(path []byte) error {
 	}
 
 	// Ignore bucket not found errors
-	if err != nil && !errors.Is(err, bbolt.ErrBucketNotFound) {
+	if err != nil && !errors.Is(err, ErrBucketNotFound) {
 		return err
 	}
 	return nil

@@ -1,5 +1,30 @@
 package boltdb
 
+import (
+	"bytes"
+	"encoding/binary"
+)
+
+// -----------------------------------------------------------------------------
+
+// EncodeUint64 stores an uint64 into a byte array using little endian format
+func EncodeUint64(value uint64) []byte {
+	valueBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(valueBytes[:], value)
+	return valueBytes
+}
+
+// DecodeUint64 decodes a little endian uint64 value
+func DecodeUint64(valueBytes []byte) uint64 {
+	if len(valueBytes) < 8 {
+		newValueBytes := make([]byte, 8)
+		copy(newValueBytes, valueBytes) // Higher bytes will remain with zeroes
+		return binary.LittleEndian.Uint64(valueBytes)
+
+	}
+	return binary.LittleEndian.Uint64(valueBytes)
+}
+
 // -----------------------------------------------------------------------------
 
 func removeLeadingSlashes(path []byte) []byte {
@@ -17,8 +42,9 @@ func removeTrailingSlashes(path []byte) []byte {
 }
 
 func getPathFragmentLen(path []byte) int {
-	var ofs int
-	for ofs = 0; ofs < len(path) && path[ofs] != '/'; ofs++ {
+	ofs := bytes.IndexByte(path, '/')
+	if ofs < 0 {
+		ofs = len(path)
 	}
 	return ofs
 }
