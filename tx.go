@@ -38,7 +38,7 @@ func (tx *TX) Bucket(path []byte) (*Bucket, error) {
 	path = removeLeadingSlashes(path)
 	nameLen := getPathFragmentLen(path)
 	if nameLen < 1 {
-		return nil, errors.New("invalid path")
+		return nil, ErrInvalidPath
 	}
 
 	if !tx.readOnly {
@@ -51,7 +51,7 @@ func (tx *TX) Bucket(path []byte) (*Bucket, error) {
 	} else {
 		b = tx.tx.Bucket(path[0:nameLen])
 		if b == nil {
-			return nil, bbolt.ErrBucketNotFound
+			return nil, ErrBucketNotFound
 		}
 	}
 
@@ -83,7 +83,7 @@ func (tx *TX) DeleteBucket(path []byte) error {
 	var err error
 
 	if tx.readOnly {
-		return bbolt.ErrTxNotWritable
+		return ErrTxNotWritable
 	}
 
 	path = removeLeadingSlashes(removeTrailingSlashes(path))
