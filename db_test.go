@@ -1,3 +1,5 @@
+// See the LICENSE file for license details.
+
 package boltdb_test
 
 import (

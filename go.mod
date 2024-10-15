@@ -1,7 +1,9 @@
 module github.com/mxmauro/boltdb
 
-go 1.20
+go 1.22
 
-require go.etcd.io/bbolt v1.3.8
+toolchain go1.23.2
+
+require go.etcd.io/bbolt v1.3.11
 
 require golang.org/x/sys v0.16.0 // indirect
