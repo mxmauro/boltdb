@@ -1,3 +1,5 @@
+// See the LICENSE file for license details.
+
 package boltdb
 
 import (
@@ -9,8 +11,9 @@ import (
 // -----------------------------------------------------------------------------
 
 var (
-	ErrInvalidPath      = errors.New("invalid path")
-	ErrBucketNotFound   = bbolt.ErrBucketNotFound
-	ErrTxNotWritable    = bbolt.ErrTxNotWritable
-	ErrDatabaseReadOnly = bbolt.ErrDatabaseReadOnly
+	ErrInvalidPath           = errors.New("invalid path")
+	ErrBucketNotFound        = bbolt.ErrBucketNotFound
+	ErrTxNotWritable         = bbolt.ErrTxNotWritable
+	ErrDatabaseReadOnly      = bbolt.ErrDatabaseReadOnly
+	ErrInvalidCursorPosition = errors.New("invalid cursor position")
 )

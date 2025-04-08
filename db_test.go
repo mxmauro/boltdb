@@ -1,3 +1,5 @@
+// See the LICENSE file for license details.
+
 package boltdb_test
 
 import (
@@ -8,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mxmauro/boltdb"
+	"github.com/mxmauro/boltdb/v2"
 )
 
 // -----------------------------------------------------------------------------
@@ -21,7 +23,7 @@ func TestSimpleAccess(t *testing.T) {
 		for keyId := 1; keyId <= 2; keyId++ {
 			err := db.Put([]byte(fmt.Sprintf("bucket-%d", bucketId)), []byte(fmt.Sprintf("key-%d", keyId)), []byte(fmt.Sprintf("value-%d", keyId)))
 			if err != nil {
-				t.Fatalf("cannot write to test database [zone=1] [err=%v]", err.Error())
+				t.Fatalf("cannot write to test database [err=%v]", err.Error())
 			}
 		}
 	}
@@ -30,7 +32,7 @@ func TestSimpleAccess(t *testing.T) {
 		for keyId := 1; keyId <= 2; keyId++ {
 			value, err := db.Get([]byte(fmt.Sprintf("bucket-%d", bucketId)), []byte(fmt.Sprintf("key-%d", keyId)))
 			if err != nil {
-				t.Fatalf("cannot read from test database [zone=1] [err=%v]", err.Error())
+				t.Fatalf("cannot read from test database [err=%v]", err.Error())
 			}
 			if value == nil || bytes.Compare(value, []byte(fmt.Sprintf("value-%d", keyId))) != 0 {
 				t.Fatalf("wrong value read from test database")
@@ -43,7 +45,7 @@ func TestTransaction(t *testing.T) {
 	db := openTestDb(t)
 	defer db.Close()
 
-	err := db.WithTx(func(tx *boltdb.TX) error {
+	err := db.WithinTx(boltdb.TxOptions{}, func(tx *boltdb.TX) error {
 		for bucketId := 11; bucketId <= 12; bucketId++ {
 			b, err2 := tx.Bucket([]byte(fmt.Sprintf("bucket-%d", bucketId)))
 			if err2 != nil {
@@ -57,12 +59,12 @@ func TestTransaction(t *testing.T) {
 			}
 		}
 		return nil
-	}, false)
+	})
 	if err != nil {
 		t.Fatalf("cannot write to test database [err=%v]", err.Error())
 	}
 
-	err = db.WithTx(func(tx *boltdb.TX) error {
+	err = db.WithinTx(boltdb.TxOptions{ReadOnly: true}, func(tx *boltdb.TX) error {
 		for bucketId := 11; bucketId <= 12; bucketId++ {
 			b, err2 := tx.Bucket([]byte(fmt.Sprintf("bucket-%d", bucketId)))
 			if err2 != nil {
@@ -76,7 +78,7 @@ func TestTransaction(t *testing.T) {
 			}
 		}
 		return nil
-	}, true)
+	})
 	if err != nil {
 		t.Fatalf("cannot read from test database [err=%v]", err.Error())
 	}
