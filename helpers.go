@@ -3,7 +3,6 @@
 package boltdb
 
 import (
-	"bytes"
 	"encoding/binary"
 )
 
@@ -29,6 +28,7 @@ func DecodeUint64(valueBytes []byte) uint64 {
 
 // -----------------------------------------------------------------------------
 
+/*
 func removeLeadingSlashes(path []byte) []byte {
 	var ofs int
 	for ofs = 0; ofs < len(path) && path[ofs] == '/'; ofs++ {
@@ -50,3 +50,4 @@ func getPathFragmentLen(path []byte) int {
 	}
 	return ofs
 }
+*/

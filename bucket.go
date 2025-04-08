@@ -7,140 +7,94 @@ import (
 	"errors"
 
 	"go.etcd.io/bbolt"
+	bolterrors "go.etcd.io/bbolt/errors"
 )
 
 // -----------------------------------------------------------------------------
 
-// Bucket is an implementation of Bucket within a transaction in BoltDB
+// Bucket represents a directory that contains keys and values inside the database.
 type Bucket struct {
 	tx   *TX
 	name []byte
 	b    *bbolt.Bucket
 }
 
+// BucketStats contains statistical data about a bucket.
 type BucketStats = bbolt.BucketStats
-
-// ForEachCallback is a callback that is called for every key found in the given request
-// NOTE: If value == nil, then they key points to a child bucket
-type ForEachCallback func(bucket *Bucket, key []byte, value []byte) (stop bool, err error)
 
 // -----------------------------------------------------------------------------
 
-// DB gets the database this bucket belongs to
+// DB gets the database associated with this bucket.
 func (bucket *Bucket) DB() *DB {
 	return bucket.tx.db
 }
 
-// TX gets the transaction this bucket belongs to
+// TX gets the transaction associated with this bucket.
 func (bucket *Bucket) TX() *TX {
 	return bucket.tx
 }
 
-// Name returns the bucket name
+// Name returns the bucket name.
 func (bucket *Bucket) Name() []byte {
 	return bucket.name
 }
 
-// NextSequence returns an autoincrement integer for the bucket
+// NextSequence returns an autoincrement integer for the bucket.
 func (bucket *Bucket) NextSequence() (uint64, error) {
 	return bucket.b.NextSequence()
 }
 
-// Get returns the value of a key in a bucket or nil if not found
+// Get returns the value of a key in a bucket or nil if not found.
 func (bucket *Bucket) Get(key []byte) []byte {
 	return bucket.b.Get(key)
 }
 
-// Put stores a key/value pair in the bucket
+// Put stores a key/value pair in the bucket.
 func (bucket *Bucket) Put(key []byte, value []byte) error {
 	return bucket.b.Put(key, value)
 }
 
-// Delete deletes a specific key. No error is returned if key is not found
+// Delete deletes a specific key. No error is returned if key is not found.
 func (bucket *Bucket) Delete(key []byte) error {
 	return bucket.b.Delete(key)
 }
 
-// DeleteWithPrefix deletes a set of keys
-func (bucket *Bucket) DeleteWithPrefix(keyPrefix []byte) error {
-	return bucket.ForEachWithKeyPrefix(keyPrefix, func(bucket *Bucket, key []byte, v []byte) (bool, error) {
-		if v == nil {
-			return true, nil // Ignore child buckets
-		}
-		return true, bucket.b.Delete(key)
-	})
-}
-
-// ForEach calls a callback for all the keys within the bucket
-func (bucket *Bucket) ForEach(cb ForEachCallback) error {
-	c := bucket.b.Cursor()
-	for k, v := c.First(); k != nil; k, v = c.Next() {
-		stop, err := cb(bucket, k, v)
-		if err != nil {
-			return err
-		}
-		if stop {
-			break
-		}
-	}
-	return nil
-}
-
-// ForEachWithKeyPrefix calls a callback for all the keys starting with the provided prefix within the bucket
-func (bucket *Bucket) ForEachWithKeyPrefix(keyPrefix []byte, cb ForEachCallback) error {
-	c := bucket.b.Cursor()
-	for k, v := c.Seek(keyPrefix); k != nil && bytes.HasPrefix(k, keyPrefix); k, v = c.Next() {
-		stop, err := cb(bucket, k, v)
-		if err != nil {
-			return err
-		}
-		if stop {
-			break
-		}
-	}
-	return nil
-}
-
 // Bucket returns a bucket on the database (and creates if it does not exist)
 func (bucket *Bucket) Bucket(path []byte) (*Bucket, error) {
-	var b *bbolt.Bucket
-
-	path = removeLeadingSlashes(path)
-	nameLen := getPathFragmentLen(path)
-	if nameLen < 1 {
-		return nil, ErrInvalidPath
+	// Parse path.
+	pi, err := newPathIterator(path)
+	if err != nil {
+		return nil, err
 	}
 
-	if !bucket.tx.readOnly {
-		var err error
+	// Get nested bucket.
+	b := bucket.b
+	readOnly := bucket.tx.readOnly
+	pathFragment, lastFragment := pi.fragment()
+	for {
+		if !readOnly {
+			b, err = b.CreateBucketIfNotExists(pathFragment)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			b = b.Bucket(pathFragment)
+			if b == nil {
+				return nil, ErrBucketNotFound
+			}
+		}
 
-		b, err = bucket.b.CreateBucketIfNotExists(path[0:nameLen])
-		if err != nil {
-			return nil, err
+		if lastFragment {
+			break
 		}
-	} else {
-		b = bucket.b.Bucket(path[0:nameLen])
-		if b == nil {
-			return nil, ErrBucketNotFound
-		}
+		pathFragment, lastFragment = pi.fragment()
 	}
 
-	// Initialize bucket object
+	// Create wrapper.
 	childBucket := &Bucket{
 		tx:   bucket.tx,
-		name: path[0:nameLen],
+		name: pathFragment,
 		b:    b,
-	}
-
-	// Get child bucket if requested
-	path = removeLeadingSlashes(path[nameLen:])
-	if len(path) > 0 {
-		var err error
-
-		childBucket, err = childBucket.Bucket(path)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	// Done
@@ -150,29 +104,106 @@ func (bucket *Bucket) Bucket(path []byte) (*Bucket, error) {
 // DeleteBucket removes an existing child bucket on the database
 // NOTE: Inner sub-keys and buckets will be also deleted
 func (bucket *Bucket) DeleteBucket(path []byte) error {
-	var err error
-
+	// Check if TX is writable.
 	if bucket.tx.readOnly {
 		return ErrTxNotWritable
 	}
 
-	path = removeLeadingSlashes(removeTrailingSlashes(path))
-	lastSlash := bytes.LastIndexByte(path, '/')
-	if lastSlash < 0 {
-		err = bucket.b.DeleteBucket(path)
-	} else {
-		var childBucket *Bucket
+	// Parse path.
+	pi, err := newPathIterator(path)
+	if err != nil {
+		return err
+	}
 
-		childBucket, err = bucket.Bucket(path[0:lastSlash])
-		if err == nil {
-			err = childBucket.DeleteBucket(path[lastSlash+1:])
+	// Go down until final fragment
+	b := bucket.b
+	pathFragment, lastFragment := pi.fragment()
+	for !lastFragment {
+		b = b.Bucket(pathFragment)
+		if b == nil {
+			return nil
+		}
+
+		pathFragment, lastFragment = pi.fragment()
+	}
+
+	// We are on the final fragment.
+	err = b.DeleteBucket(pathFragment)
+
+	// Done
+	if err != nil && errors.Is(err, bolterrors.ErrBucketNotFound) {
+		return nil // Ignore bucket not found errors.
+	}
+	return err
+}
+
+// Iterate creates an iterator object that allows to search for stored keys.
+func (bucket *Bucket) Iterate() *Iterator {
+	// Create wrapper.
+	iter := Iterator{
+		bucket: bucket,
+		cursor: bucket.b.Cursor(),
+	}
+
+	// Done
+	return &iter
+}
+
+func (bucket *Bucket) WithIterator(opts IteratorOptions, cb WithinIteratorCallback) error {
+	if len(opts.Prefix) > 0 && len(opts.FirstKey) > 0 {
+		return errors.New("prefix and first key cannot be used at the same time")
+	}
+
+	iter := bucket.Iterate()
+
+	// Search for the first match.
+	if len(opts.Prefix) > 0 {
+		if !opts.Reverse {
+			_ = iter.Seek(opts.Prefix, SeekPrefix)
+		} else {
+			_ = iter.Seek(opts.Prefix, SeekPrefixReverse)
+		}
+	} else if len(opts.FirstKey) > 0 {
+		if !opts.Reverse {
+			_ = iter.Seek(opts.FirstKey, SeekGreaterOrEqual)
+		} else {
+			_ = iter.Seek(opts.FirstKey, SeekLessOrEqual)
+		}
+	} else {
+		if !opts.Reverse {
+			_ = iter.First()
+		} else {
+			_ = iter.Last()
 		}
 	}
 
-	// Ignore bucket not found errors
-	if err != nil && !errors.Is(err, ErrBucketNotFound) {
-		return err
+	// Iterate.
+	for iter.IsValid() {
+		// Call callback.
+		stop, err := cb(iter)
+		if err != nil {
+			return err
+		}
+		if stop {
+			break
+		}
+
+		// Advance to next item.
+		if !opts.Reverse {
+			_ = iter.Next()
+		} else {
+			_ = iter.Prev()
+		}
+
+		// If we passed a prefix as an option, check if it has it.
+		if iter.IsValid() && len(opts.Prefix) > 0 {
+			if !bytes.HasPrefix(iter.Key(), opts.Prefix) {
+				break
+			}
+		}
 	}
+
+	// Done
 	return nil
 }
 
