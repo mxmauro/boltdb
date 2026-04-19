@@ -32,7 +32,7 @@ func newPathIterator(path []byte) (pathIterator, error) {
 }
 
 func (pi *pathIterator) fragment() ([]byte, bool) {
-	// Get next fragment.
+	// Get the next fragment.
 	fragmentStart := pi.offset
 	for pi.offset < pi.pathLen {
 		if pi.path[pi.offset] == '/' {

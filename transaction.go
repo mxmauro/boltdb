@@ -94,7 +94,7 @@ func (tx *TX) Bucket(path []byte) (*Bucket, error) {
 		bucketName = pathFragment
 	}
 
-	// Create wrapper.
+	// Create a wrapper.
 	bucket := &Bucket{
 		tx:   tx,
 		name: bucketName,
@@ -105,7 +105,7 @@ func (tx *TX) Bucket(path []byte) (*Bucket, error) {
 	return bucket, nil
 }
 
-// DeleteBucket removes an existing child bucket from the database including nested buckets and stored keys.
+// DeleteBucket removes an existing child bucket from the database, including nested buckets and stored keys.
 func (tx *TX) DeleteBucket(path []byte) error {
 	// Check if TX is writable.
 	if tx.readOnly {
@@ -120,7 +120,7 @@ func (tx *TX) DeleteBucket(path []byte) error {
 
 	pathFragment, lastFragment := pi.fragment()
 	if lastFragment {
-		// If it is the last fragment, then delete a top bucket.
+		// If it is the last fragment, then delete the top bucket.
 		err = tx.tx.DeleteBucket(pathFragment)
 	} else {
 		// Else get the nested bucket.

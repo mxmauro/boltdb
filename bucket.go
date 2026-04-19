@@ -45,8 +45,14 @@ func (bucket *Bucket) NextSequence() (uint64, error) {
 }
 
 // Get returns the value of a key in a bucket or nil if not found.
+// The returned slice is only valid for the lifetime of the transaction.
 func (bucket *Bucket) Get(key []byte) []byte {
 	return bucket.b.Get(key)
+}
+
+// CopyGet returns a copy of the value of a key in a bucket or nil if not found.
+func (bucket *Bucket) CopyGet(key []byte) []byte {
+	return cloneBytes(bucket.b.Get(key))
 }
 
 // Put stores a key/value pair in the bucket.
@@ -54,7 +60,7 @@ func (bucket *Bucket) Put(key []byte, value []byte) error {
 	return bucket.b.Put(key, value)
 }
 
-// Delete deletes a specific key. No error is returned if key is not found.
+// Delete deletes a specific key. No error is returned if the key is not found.
 func (bucket *Bucket) Delete(key []byte) error {
 	return bucket.b.Delete(key)
 }
@@ -90,7 +96,7 @@ func (bucket *Bucket) Bucket(path []byte) (*Bucket, error) {
 		pathFragment, lastFragment = pi.fragment()
 	}
 
-	// Create wrapper.
+	// Create a wrapper.
 	childBucket := &Bucket{
 		tx:   bucket.tx,
 		name: pathFragment,
@@ -115,7 +121,7 @@ func (bucket *Bucket) DeleteBucket(path []byte) error {
 		return err
 	}
 
-	// Go down until final fragment
+	// Go down until the final fragment
 	b := bucket.b
 	pathFragment, lastFragment := pi.fragment()
 	for !lastFragment {
@@ -139,7 +145,7 @@ func (bucket *Bucket) DeleteBucket(path []byte) error {
 
 // Iterate creates an iterator object that allows to search for stored keys.
 func (bucket *Bucket) Iterate() *Iterator {
-	// Create wrapper.
+	// Create a wrapper.
 	iter := Iterator{
 		bucket: bucket,
 		cursor: bucket.b.Cursor(),
@@ -149,7 +155,10 @@ func (bucket *Bucket) Iterate() *Iterator {
 	return &iter
 }
 
-func (bucket *Bucket) WithIterator(opts IteratorOptions, cb WithinIteratorCallback) error {
+// WithIterator creates an iterator object that allows to search for stored keys.
+// NOTE: Prefix and FirstKey cannot be used at the same time.
+// NOTE: If value == nil, then they key points to a child bucket.
+func (bucket *Bucket) WithIterator(opts WithIteratorOptions, cb WithinIteratorCallback) error {
 	if len(opts.Prefix) > 0 && len(opts.FirstKey) > 0 {
 		return errors.New("prefix and first key cannot be used at the same time")
 	}
@@ -188,7 +197,7 @@ func (bucket *Bucket) WithIterator(opts IteratorOptions, cb WithinIteratorCallba
 			break
 		}
 
-		// Advance to next item.
+		// Advance to the next item.
 		if !opts.Reverse {
 			_ = iter.Next()
 		} else {
