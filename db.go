@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"time"
 
 	"go.etcd.io/bbolt"
 )
@@ -18,11 +19,12 @@ type DB struct {
 	readOnly bool
 }
 
-// Options specifies a set of options when creating/opening the database.
+// Options specify a set of options when creating/opening the database.
 type Options struct {
 	ReadOnly    bool
 	DirFileMode os.FileMode
 	DbFileMode  os.FileMode
+	Timeout     time.Duration
 }
 
 // -----------------------------------------------------------------------------
@@ -36,7 +38,7 @@ func New(filename string) (*DB, error) {
 func NewWithOptions(filename string, opts Options) (*DB, error) {
 	var fileMode os.FileMode
 
-	// Create directory if writing to the database
+	// Create a directory if writing to the database
 	if !opts.ReadOnly {
 		fileMode = 0700
 		if opts.DirFileMode != 0 {
@@ -58,12 +60,13 @@ func NewWithOptions(filename string, opts Options) (*DB, error) {
 	db, err := bbolt.Open(filename, fileMode, &bbolt.Options{
 		FreelistType: bbolt.FreelistMapType,
 		ReadOnly:     opts.ReadOnly,
+		Timeout:      opts.Timeout,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Create wrapper.
+	// Create a wrapper.
 	b := &DB{
 		db:       db,
 		readOnly: opts.ReadOnly,
@@ -75,7 +78,7 @@ func NewWithOptions(filename string, opts Options) (*DB, error) {
 
 // Close closes the database connection.
 func (db *DB) Close() {
-	_ = db.db.Close() // Well, if we cannot close a file, we won't be the only problem.
+	_ = db.db.Close() // Intentionally ignored: callers cannot reasonably recover from close failures here.
 }
 
 // BeginTx starts a new transaction within the database.
@@ -87,7 +90,7 @@ func (db *DB) BeginTx(opts TxOptions) (*TX, error) {
 		return nil, ErrDatabaseReadOnly
 	}
 
-	// Create wrapper.
+	// Create a wrapper.
 	tx := TX{
 		db:       db,
 		readOnly: opts.ReadOnly,
@@ -131,7 +134,7 @@ func (db *DB) Get(bucket []byte, key []byte) ([]byte, error) {
 			return err
 		}
 
-		value = b.Get(key)
+		value = cloneBytes(b.Get(key))
 		return nil
 	})
 
@@ -151,7 +154,7 @@ func (db *DB) Put(bucket []byte, key []byte, value []byte) error {
 	})
 }
 
-// Delete deletes a specific key in the specified bucket. No error is returned if key is not found.
+// Delete deletes a specific key in the specified bucket. No error is returned if the key is not found.
 func (db *DB) Delete(bucket []byte, key []byte) error {
 	return db.WithinTx(TxOptions{}, func(tx *TX) error {
 		b, err := tx.Bucket(bucket)

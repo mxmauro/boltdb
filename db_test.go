@@ -6,11 +6,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/mxmauro/boltdb/v2"
+	"github.com/mxmauro/boltdb/v3"
 )
 
 // -----------------------------------------------------------------------------
@@ -84,14 +83,81 @@ func TestTransaction(t *testing.T) {
 	}
 }
 
+func TestGetReturnsStableCopy(t *testing.T) {
+	db := openTestDb(t)
+	defer db.Close()
+
+	bucketName := []byte("stable-copy-bucket")
+	key := []byte("stable-copy-key")
+	initialValue := []byte("value-1")
+
+	if err := db.Put(bucketName, key, initialValue); err != nil {
+		t.Fatalf("cannot write initial value [err=%v]", err.Error())
+	}
+
+	value, err := db.Get(bucketName, key)
+	if err != nil {
+		t.Fatalf("cannot read initial value [err=%v]", err.Error())
+	}
+	if !bytes.Equal(value, initialValue) {
+		t.Fatalf("wrong initial value [got=%q]", value)
+	}
+
+	if err := db.Put(bucketName, key, []byte("value-2")); err != nil {
+		t.Fatalf("cannot overwrite value [err=%v]", err.Error())
+	}
+
+	if !bytes.Equal(value, initialValue) {
+		t.Fatalf("returned value was not stable after transaction end [got=%q]", value)
+	}
+}
+
+func TestReadOnlyDatabaseRejectsWrites(t *testing.T) {
+	db := openTestDb(t)
+	defer db.Close()
+
+	bucketName := []byte("read-only-bucket")
+	key := []byte("read-only-key")
+	value := []byte("read-only-value")
+
+	if err := db.Put(bucketName, key, value); err != nil {
+		t.Fatalf("cannot seed test database [err=%v]", err.Error())
+	}
+	db.Close()
+
+	readOnlyDb, err := boltdb.NewWithOptions(filepath.Join(t.TempDir(), "missing.db"), boltdb.Options{ReadOnly: true})
+	if err == nil {
+		readOnlyDb.Close()
+		t.Fatalf("expected opening a missing read-only database to fail")
+	}
+
+	filename := filepath.Join(t.TempDir(), "read-only.db")
+	writableDb, err := boltdb.New(filename)
+	if err != nil {
+		t.Fatalf("cannot create writable test database [err=%v]", err.Error())
+	}
+	if err := writableDb.Put(bucketName, key, value); err != nil {
+		writableDb.Close()
+		t.Fatalf("cannot seed writable database [err=%v]", err.Error())
+	}
+	writableDb.Close()
+
+	readOnlyDb, err = boltdb.NewWithOptions(filename, boltdb.Options{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("cannot reopen read-only database [err=%v]", err.Error())
+	}
+	defer readOnlyDb.Close()
+
+	if err := readOnlyDb.Put(bucketName, key, []byte("new-value")); !errors.Is(err, boltdb.ErrDatabaseReadOnly) {
+		t.Fatalf("expected ErrDatabaseReadOnly [got=%v]", err)
+	}
+}
+
 func openTestDb(t *testing.T) *boltdb.DB {
 	var db *boltdb.DB
+	var err error
 
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("cannot get current directory [err=%v]", err.Error())
-	}
-	filename := filepath.Join(dir, "testdata", "test.db")
+	filename := filepath.Join(t.TempDir(), "test.db")
 
 	db, err = boltdb.New(filename)
 	if err != nil {

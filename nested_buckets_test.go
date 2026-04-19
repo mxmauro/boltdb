@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/mxmauro/boltdb/v2"
+	"github.com/mxmauro/boltdb/v3"
 )
 
 // -----------------------------------------------------------------------------

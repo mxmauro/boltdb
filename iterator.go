@@ -8,6 +8,7 @@ import (
 
 // -----------------------------------------------------------------------------
 
+// SeekMethod specifies the search method for the iterator.
 type SeekMethod int
 
 const (
@@ -26,7 +27,9 @@ type Iterator struct {
 	value  []byte
 }
 
-type IteratorOptions struct {
+// WithIteratorOptions specifies a set of options when creating a new iterator.
+// NOTE: Prefix and FirstKey cannot be used at the same time.
+type WithIteratorOptions struct {
 	// Reverse scan keys in reverse order.
 	Reverse bool
 
@@ -37,7 +40,7 @@ type IteratorOptions struct {
 	FirstKey []byte
 }
 
-// WithinIteratorCallback is a callback that is called for every key found in the given request
+// WithinIteratorCallback is a callback called for every key found in the given request
 // NOTE: If value == nil, then they key points to a child bucket
 type WithinIteratorCallback func(iter *Iterator) (stop bool, err error)
 
@@ -54,6 +57,12 @@ func (iter *Iterator) Key() []byte {
 	return iter.key
 }
 
+// CopyKey acts like Key but returns a copy of the key, so it remains valid after moving the iterator
+// position.
+func (iter *Iterator) CopyKey() []byte {
+	return cloneBytes(iter.key)
+}
+
 // HasKeyPrefix checks if the current key has the provided prefix.
 func (iter *Iterator) HasKeyPrefix(prefix []byte) bool {
 	if len(iter.key) == 0 {
@@ -68,7 +77,7 @@ func (iter *Iterator) Value() []byte {
 	return iter.value
 }
 
-// CopyValue acts like Value but returns a copy of the value so it remains valid after moving the iterator
+// CopyValue acts like Value but returns a copy of the value, so it remains valid after moving the iterator
 // position.
 func (iter *Iterator) CopyValue() []byte {
 	if iter.value == nil {
@@ -117,7 +126,7 @@ func (iter *Iterator) Prev() bool {
 func (iter *Iterator) Seek(prefix []byte, method SeekMethod) bool {
 	origPrefix := prefix
 
-	if len(prefix) > 0 && (method == SeekPrefixReverse || method == SeekLessOrEqual) {
+	if len(prefix) > 0 && method == SeekPrefixReverse {
 		var i int
 
 		prefix = make([]byte, len(origPrefix))
@@ -150,7 +159,7 @@ func (iter *Iterator) Seek(prefix []byte, method SeekMethod) bool {
 		return iter.clean()
 	}
 
-	// Search for the prefix/
+	// Search for the prefix.
 	iter.key, iter.value = iter.cursor.Seek(prefix)
 
 	switch method {
@@ -161,8 +170,7 @@ func (iter *Iterator) Seek(prefix []byte, method SeekMethod) bool {
 
 	case SeekPrefix:
 		if len(iter.key) == 0 || !bytes.HasPrefix(iter.key, prefix) {
-			iter.key, iter.value = nil, nil
-			return false
+			return iter.clean()
 		}
 
 	case SeekPrefixReverse:
@@ -172,16 +180,15 @@ func (iter *Iterator) Seek(prefix []byte, method SeekMethod) bool {
 			}
 		} else {
 			if !iter.Prev() {
-				return false
+				return iter.clean()
 			}
 		}
 		if !bytes.HasPrefix(iter.key, origPrefix) {
-			iter.key, iter.value = nil, nil
-			return false
+			return iter.clean()
 		}
 
 	case SeekGreaterOrEqual:
-		// Seek already search for the next item.
+		// Seek to already search for the next item.
 		if len(iter.key) == 0 {
 			return iter.clean()
 		}
@@ -191,13 +198,10 @@ func (iter *Iterator) Seek(prefix []byte, method SeekMethod) bool {
 			if !iter.Last() {
 				return iter.clean()
 			}
-		} else {
+		} else if bytes.Compare(iter.key, origPrefix) > 0 {
 			if !iter.Prev() {
-				return false
+				return iter.clean()
 			}
-		}
-		if bytes.Compare(iter.key, prefix) > 0 {
-			return iter.clean()
 		}
 	}
 
