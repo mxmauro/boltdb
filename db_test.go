@@ -34,7 +34,7 @@ func TestSimpleAccess(t *testing.T) {
 				t.Fatalf("cannot read from test database [err=%v]", err.Error())
 			}
 			if value == nil || bytes.Compare(value, []byte(fmt.Sprintf("value-%d", keyId))) != 0 {
-				t.Fatalf("wrong value read from test database")
+				t.Fatal("wrong value read from test database")
 			}
 		}
 	}
@@ -128,7 +128,7 @@ func TestReadOnlyDatabaseRejectsWrites(t *testing.T) {
 	readOnlyDb, err := boltdb.NewWithOptions(filepath.Join(t.TempDir(), "missing.db"), boltdb.Options{ReadOnly: true})
 	if err == nil {
 		readOnlyDb.Close()
-		t.Fatalf("expected opening a missing read-only database to fail")
+		t.Fatal("expected opening a missing read-only database to fail")
 	}
 
 	filename := filepath.Join(t.TempDir(), "read-only.db")

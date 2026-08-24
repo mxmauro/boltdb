@@ -3,8 +3,13 @@
 ## Scope
 - These instructions apply to the whole repository.
 - Treat this as a Go codebase first. Preserve the current repository structure instead of reshaping files or folders unless the task requires it.
-- Make the smallest change that solves the task. Do not reformat, rename, or rewrite unrelated code.§
 - Do not touch unrelated user changes. The repository may be dirty.
+
+## Working principles
+- Think before coding. State assumptions explicitly, surface ambiguity or tradeoffs instead of picking silently, and ask for clarification when requirements or nearby code are unclear.
+- Simplicity first. Make the smallest change that solves the task. Do not add speculative abstractions, configurability, or features that were not requested.
+- Surgical changes. Keep diffs limited to the requested behavior, tests, and directly required documentation. Do not reformat, rename, or rewrite unrelated code. Remove only imports, variables, or helpers that your change made unused.
+- Goal-driven execution. Define the verification target before editing, prefer focused tests or checks that prove the changed behavior, and broaden revalidation only as the change scope requires.
 
 ## File format
 - Use LF line endings for text files unless the repository explicitly requires something else for a specific path.
@@ -44,16 +49,12 @@
 
 ## Tests and revalidation
 - Update or extend tests when behavior changes, especially for synchronization, cancellation, lifecycle, error-path, parsing, validation, or boundary-condition logic.
-- Prefer focused tests that prove the changed behavior and guard against regressions.
 - Re-run the narrowest useful validation first, then broader validation when the change affects shared behavior.
 - For concurrency-sensitive Go changes, prefer running both `go test ./...` and `go test -race ./...` unless the user explicitly asks not to.
 - If other project-specific validation exists, run the relevant subset for the changed area rather than skipping validation entirely.
 - If full revalidation cannot be run, say so clearly and explain what remains unchecked.
 
 ## Editing rules for agents
-- Before changing a file, read the nearby code and match its local style.
-- Prefer focused patches over broad cleanup.
 - Keep formatting and code changes limited to the specific functions or blocks required by the task. Do not rewrite unrelated nearby code.
-- Keep diffs scoped to the requested task and any directly required tests or documentation updates.
 - Preserve line endings, indentation, and spacing exactly in untouched regions.
 - If a task creates tension between style and correctness or security, prioritize correctness and security while keeping the diff as small as possible.
