@@ -119,7 +119,7 @@ func TestIteratorCopyHelpers(t *testing.T) {
 
 	iter := bucket.Iterate()
 	if !iter.First() {
-		t.Fatalf("cannot position iterator")
+		t.Fatal("cannot position iterator")
 	}
 
 	copiedKey := iter.CopyKey()
@@ -168,14 +168,14 @@ func TestIteratorDeleteKeyAndBucket(t *testing.T) {
 
 		iter := bucket.Iterate()
 		if !iter.Seek([]byte("alpha"), boltdb.SeekExact) {
-			t.Fatalf("cannot position iterator on key entry")
+			t.Fatal("cannot position iterator on key entry")
 		}
 		if err := iter.Delete(); err != nil {
 			return err
 		}
 
 		if !iter.Seek([]byte("child"), boltdb.SeekExact) {
-			t.Fatalf("cannot position iterator on nested bucket entry")
+			t.Fatal("cannot position iterator on nested bucket entry")
 		}
 		return iter.Delete()
 	})

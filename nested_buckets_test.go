@@ -55,7 +55,7 @@ func TestNestedBuckets(t *testing.T) {
 		return nil
 	})
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 
 	err = db.WithinTx(boltdb.TxOptions{ReadOnly: true}, func(tx *boltdb.TX) error {
@@ -78,6 +78,6 @@ func TestNestedBuckets(t *testing.T) {
 		return nil
 	})
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 }
